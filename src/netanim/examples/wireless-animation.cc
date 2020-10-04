@@ -1,21 +1,21 @@
 /* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
 /*
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation;
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- *
- * Author: Vikas Pushkar (Adapted from third.cc)
- */
-
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License version 2 as
+* published by the Free Software Foundation;
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+*
+* Author: Vikas Pushkar (Adapted from third.cc)
+*/
+ 
 #include "ns3/core-module.h"
 #include "ns3/point-to-point-module.h"
 #include "ns3/csma-module.h"
@@ -24,216 +24,240 @@
 #include "ns3/mobility-module.h"
 #include "ns3/internet-module.h"
 #include "ns3/netanim-module.h"
-#include "ns3/basic-energy-source.h"
-#include "ns3/simple-device-energy-model.h"
 #include "ns3/yans-wifi-helper.h"
 #include "ns3/ssid.h"
-#include "ns3/wifi-radio-energy-model.h"
+#include "ns3/flow-monitor-helper.h"
+#include "ns3/ipv4-flow-classifier.h"
 
 using namespace ns3;
+using namespace std;
 
-NS_LOG_COMPONENT_DEFINE ("Wireless Environment for Graduation");
-
-int 
-main (int argc, char *argv[])
+NS_LOG_COMPONENT_DEFINE ("WirelessAnimationExample");
+ 
+int main (int argc, char *argv[])
 {
-  uint32_t nWifi = 5;                                                  //20 >> 10 End point 개수
-  double distance = 5;
-  CommandLine cmd (__FILE__);
-  cmd.AddValue ("nWifi", "Number of wifi STA devices", nWifi);          
-  cmd.AddValue ("distance", "Distance in meters between the station and the access point", distance);
+  int nSta = 70;
+  int nAp = 4;
+  // int nAp = 3;
 
-  cmd.Parse (argc,argv);
-  NodeContainer allNodes;                                               // 모든 ap, end point, csma 노드를 저장하는 컨테이너                        
-  NodeContainer wifiStaNodes[2];                                           //Sta = standard
-  wifiStaNodes[0].Create (nWifi);
+  double apX[4] = {12.5, 37.5, 12.5, 37.5};
+  double apY[4] = {12.5, 12.5, 37.5, 37.5};
+  // double apX[nAp] = {12.5, 37.5, 12.5};
+  // double apY[nAp] = {12.5, 12.5, 37.5};
 
-  wifiStaNodes[1].Create (2);
-  allNodes.Add (wifiStaNodes[1]);
-  
-  allNodes.Add (wifiStaNodes[0]);
-  NodeContainer wifiApNode[2] ;
-  wifiApNode[0].Create (4);                                                //AP 개수 
-  allNodes.Add (wifiApNode[0]);                                            
+  string ssids[4] = {"ns-3-ssid1",
+                       "ns-3-ssid2",
+                       "ns-3-ssid3"
+                       "ns-3-ssid4"};
+  // string ssids[4] = {"ns-3-ssid1",
+  //                      "ns-3-ssid2",
+  //                      "ns-3-ssid3"}; 
 
-  wifiApNode[1].Create(1);  
-  allNodes.Add(wifiApNode[1]);
+  string ips[4] = {"10.1.2.0",
+                     "10.1.3.0",
+                     "10.1.4.0",
+                     "10.1.5.0"};
+  // string ips[nAp] = {"10.1.2.0",
+  //                    "10.1.3.0",
+  //                    "10.1.4.0"};
 
-  YansWifiChannelHelper channel = YansWifiChannelHelper::Default ();    //Wifi channel helper
-  YansWifiPhyHelper phy = YansWifiPhyHelper::Default ();                //phy helper phy는 계층, mac도 계층임
-  phy.SetChannel (channel.Create ());
+  // LogComponentEnable("UdpEchoClientApplication", LOG_LEVEL_INFO);
+  // LogComponentEnable("UdpEchoServerApplication", LOG_LEVEL_INFO);
 
-  WifiHelper wifi;
-  wifi.SetRemoteStationManager ("ns3::AarfWifiManager");                // 딱히 들어가는거 의미 없는듯
+  NodeContainer allNodes;
+  NodeContainer wifiStaNodes;
+  wifiStaNodes.Create (nSta);
+  allNodes.Add (wifiStaNodes);
+  NodeContainer wifiApNodes;
+  wifiApNodes.Create (nAp);
+  allNodes.Add(wifiApNodes);
 
-  WifiMacHelper mac;                                                    // ap에 ssid, activeprobing 설정
-  Ssid ssid = Ssid ("ssid");
-  mac.SetType ("ns3::StaWifiMac",
-               "Ssid", SsidValue (ssid),
-               "ActiveProbing", BooleanValue (false));                  
+  NodeContainer csmaNodes;
+  csmaNodes.Add (wifiApNodes);
+  csmaNodes.Create (1);
+  allNodes.Add (csmaNodes.Get (nAp));
 
-  NetDeviceContainer staDevices[2];
-  
-  
-  staDevices[0] = wifi.Install (phy, mac, wifiStaNodes[0]);                                          // standard device wifi에 인스톨 한다
-  staDevices[1] = wifi.Install (phy, mac, wifiStaNodes[1]);
+  CsmaHelper csma;
+  csma.SetChannelAttribute ("DataRate", StringValue ("100Mbps"));
+  csma.SetChannelAttribute ("Delay", TimeValue (NanoSeconds (6560)));
 
+  NetDeviceContainer csmaDevices;
+  csmaDevices = csma.Install (csmaNodes);
 
-  mac.SetType ("ns3::ApWifiMac",
-               "Ssid", SsidValue (ssid));                                                           // mac을 wifi으로 세팅하고 이전에 설정한 ssid값 삽입
-
-  NetDeviceContainer apDevices[2];                                                                   // apDevice에 연결
-  apDevices[0] = wifi.Install (phy, mac, wifiApNode[0]);                        //
-  apDevices[1] = wifi.Install (phy, mac, wifiApNode[1]);
-
-  // Mobility
-
-  MobilityHelper mobility;
-
-  mobility.SetPositionAllocator ("ns3::GridPositionAllocator",
-                                 "MinX", DoubleValue (10.0),                                              // 단말 노드 위치 지정
-                                 "MinY", DoubleValue (0.0),                                              
-                                 "DeltaX", DoubleValue (10.0),                                             // 노드가 반복되서 설치 되는데 이거는 각 노드들의 거리
-                                 "DeltaY", DoubleValue (2.0),
-                                 "GridWidth", UintegerValue (5),
-                                 "LayoutType", StringValue ("RowFirst"));
-  mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",                                            //단말 노드들의 움직임 랜덤하게 움직이는 범위 지정
-                             "Bounds", RectangleValue (Rectangle (0, 100, -20, 50)));
-  mobility.Install (wifiStaNodes[0]);
-
-  mobility.SetPositionAllocator ("ns3::GridPositionAllocator",
-                                 "MinX", DoubleValue (10.0),                                              // 단말 노드 위치 지정
-                                 "MinY", DoubleValue (40.0),                                              
-                                 "DeltaX", DoubleValue (5.0),                                             // 노드가 반복되서 설치 되는데 이거는 각 노드들의 거리
-                                 "DeltaY", DoubleValue (2.0),
-                                 "GridWidth", UintegerValue (5),
-                                 "LayoutType", StringValue ("RowFirst"));
-  mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",                                            //단말 노드들의 움직임 랜덤하게 움직이는 범위 지정
-                             "Bounds", RectangleValue (Rectangle (0, 100, -20, 50)));
-  mobility.Install (wifiStaNodes[1]);
-
-
-  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");                                       //ap는 고정 되있음
-  mobility.SetPositionAllocator ("ns3::GridPositionAllocator",
-                                 "MinX", DoubleValue (12.0),                                             
-                                 "MinY", DoubleValue (10.0),                                              //ap 노드들의 위치 설정
-                                 "DeltaX", DoubleValue (20.0),
-                                 "DeltaY", DoubleValue (2.0),
-                                 "GridWidth", UintegerValue (5),
-                                 "LayoutType", StringValue ("RowFirst"));
-  mobility.Install (wifiApNode[0]);
-
-  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");                                       //ap는 고정 되있음
-  mobility.SetPositionAllocator ("ns3::GridPositionAllocator",
-                                 "MinX", DoubleValue (8.0),                                             
-                                 "MinY", DoubleValue (25.0),                                              //ap 노드들의 위치 설정
-                                 "DeltaX", DoubleValue (10.0),
-                                 "DeltaY", DoubleValue (2.0),
-                                 "GridWidth", UintegerValue (5),
-                                 "LayoutType", StringValue ("RowFirst"));
-  mobility.Install (wifiApNode[1]);  
-                                                                       
-  Ptr<BasicEnergySource> energySource = CreateObject<BasicEnergySource>();
-  Ptr<WifiRadioEnergyModel> energyModel = CreateObject<WifiRadioEnergyModel>();
-
-  energySource->SetInitialEnergy (600);
-  energyModel->SetEnergySource (energySource);
-  energySource->AppendDeviceEnergyModel (energyModel);
-
-  // aggregate energy source to node
-  wifiApNode[0].Get (0)->AggregateObject (energySource);
-
-
-  Ptr<BasicEnergySource> energySource2 = CreateObject<BasicEnergySource>();
-  Ptr<WifiRadioEnergyModel> energyModel2 = CreateObject<WifiRadioEnergyModel>();
-
-  energySource2->SetInitialEnergy (600);
-  energyModel2->SetEnergySource (energySource2);
-  energySource2->AppendDeviceEnergyModel (energyModel2);
-
-  wifiApNode[1].Get (0)->AggregateObject (energySource2);
   // Install internet stack
-
   InternetStackHelper stack;
   stack.Install (allNodes);
 
   // Install Ipv4 addresses
+  Ipv4AddressHelper address;
+  address.SetBase ("10.1.1.0", "255.255.255.0");
+  Ipv4InterfaceContainer csmaInterfaces;
+  csmaInterfaces = address.Assign (csmaDevices);
 
-  Ipv4AddressHelper address;                                                                      //노드들 역할 알아보고 노드 주소 설정 다시 해야할듯
-  address.SetBase("192.168.1.0", "255.255.255.0");
+  // Mobility
+  MobilityHelper mobility;
+  mobility.SetPositionAllocator ("ns3::GridPositionAllocator",
+                                "MinX", DoubleValue (1),
+                                "MinY", DoubleValue (1),
+                                "DeltaX", DoubleValue (8),
+                                "DeltaY", DoubleValue (8),
+                                "GridWidth", UintegerValue (6),
+                                "LayoutType", StringValue ("RowFirst"));
+  mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
+                            "Bounds", RectangleValue (Rectangle (0,50,0,50)));
+  mobility.Install (wifiStaNodes);  
+  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+  mobility.Install (wifiApNodes);
 
-  Ipv4InterfaceContainer staInterfaces[2];
-  staInterfaces[0] = address.Assign (staDevices[0]);
-  staInterfaces[1] = address.Assign (staDevices[1]);
-  //address.SetBase ("164.125.180.0", "255.255.255.0");
+  for (int i = 0; i < nAp ; i++)
+  {
+    AnimationInterface::SetConstantPosition (wifiApNodes.Get(i), apX[i], apY[i]);
+  }  
+  AnimationInterface::SetConstantPosition (csmaNodes.Get(nAp), 25, 25); 
 
-  Ipv4InterfaceContainer apInterface[2];
-  apInterface[0] = address.Assign (apDevices[0]);
-  apInterface[1] = address.Assign (apDevices[1]);
+  list<int> minDistAp;
+  for (int i = 0 ; i < nSta ; i++)
+  {
+    int minJ = 0;
+    double minDistance = 0;
+    for (int j = 0 ; j < nAp ; j++ )
+    {
+      Ptr<MobilityModel> model1 = wifiApNodes.Get(j)->GetObject<MobilityModel>();
+      Ptr<MobilityModel> model2 = wifiStaNodes.Get(i)->GetObject<MobilityModel>();
+      if ( j ==0 )
+      {
+        minDistance = model1->GetDistanceFrom(model2);
+        minJ = j;
+      } 
+      else
+      {
+        double distance = model1->GetDistanceFrom (model2);
+        if (distance < minDistance) 
+        {
+          minDistance = distance;
+          minJ = j;
+        }
+      }
+    }
+    minDistAp.push_back(minJ);
+  }                   
 
-  
-  std::cout<<"before server setting\n";
-  UdpServerHelper myServer (9);
-	ApplicationContainer serverApp;
-  serverApp = myServer.Install (wifiStaNodes[0].Get (0));
-	serverApp.Start (Seconds (0.0));
-	serverApp.Stop (Seconds (15.0));
+  list<NetDeviceContainer> staDevicesList;
+  list<NetDeviceContainer> apDevicesList;
+  for (int i = 0 ; i < nAp ; i++)
+  {
+    YansWifiChannelHelper channel = YansWifiChannelHelper::Default ();
+    YansWifiPhyHelper phy = YansWifiPhyHelper::Default ();
+    phy.SetChannel (channel.Create ());
 
-  // serverApp[1] = myServer.Install (wifiStaNodes[1].Get (0));
-	// serverApp[1].Start (Seconds (0.0));
-	// serverApp[1].Stop (Seconds (15.0));
+    WifiHelper wifi;
+    wifi.SetRemoteStationManager ("ns3::AarfWifiManager");    
 
-  std::cout<<"before client setting\n";
-	UdpClientHelper myClient (staInterfaces[0].GetAddress (0), 9);
-	myClient.SetAttribute ("MaxPackets", UintegerValue (987654321));	// Maximum number of packets = 2^32
-	myClient.SetAttribute ("Interval", TimeValue (Time ("0.00002"))); //packets/s
-	myClient.SetAttribute ("PacketSize", UintegerValue (256));
+    WifiMacHelper mac;
+    Ssid ssid = Ssid (ssids[i].c_str());
+    mac.SetType ("ns3::StaWifiMac",
+                "Ssid", SsidValue (ssid),
+                "ActiveProbing", BooleanValue (false));
 
-  std::cout<<"before clientapp setting\n";
+    NetDeviceContainer staDevices;
+    NodeContainer wifiAssocStaNodes;
+    for (list<int>::iterator iter = minDistAp.begin() ; iter != minDistAp.end() ; iter++)
+    {
+      if ( *iter == i) 
+      {
+        int index = distance(minDistAp.begin(), iter);
+        wifiAssocStaNodes.Add(wifiStaNodes.Get(index));
+      }
+    }
 
-	ApplicationContainer clientApps;
-  clientApps = myClient.Install (wifiApNode[0].Get (0));
-  // clientApps = myClient2.Install (wifiApNode[1].Get (0));
-  clientApps.Start (Seconds (2.0));                                                                       //클라이언트도 ON
-  clientApps.Start (Seconds (2.0));  
-                                                                       //클라이언트도 ON
-  std::cout<<"before routingtable setting\n";
+    staDevices = wifi.Install (phy, mac, wifiAssocStaNodes);
+    mac.SetType ("ns3::ApWifiMac",
+                "Ssid", SsidValue (ssid));
+
+    NetDeviceContainer apDevices;
+    apDevices = wifi.Install (phy, mac, wifiApNodes.Get(i));
+
+    staDevicesList.push_back(staDevices);
+    apDevicesList.push_back(apDevices);
+  }
+
+  for ( int i = 0 ; i < nAp ; i++ ) 
+  {
+    list<NetDeviceContainer>::iterator iter;
+    address.SetBase (ips[i].c_str(), "255.255.255.0");
+
+    iter = staDevicesList.begin();
+    advance(iter, i);
+    Ipv4InterfaceContainer staInterfaces;
+    staInterfaces = address.Assign (*iter);
+    
+    iter = apDevicesList.begin();
+    advance(iter, i);    
+    Ipv4InterfaceContainer apInterface;
+    apInterface = address.Assign (*iter);
+  }
+
+  // Install applications
+
+  UdpEchoServerHelper echoServer (9);
+  ApplicationContainer serverApps = echoServer.Install (csmaNodes.Get (nAp));
+  serverApps.Start (Seconds (1.0));
+  serverApps.Stop (Seconds (15.0));
+  UdpEchoClientHelper echoClient (csmaInterfaces.GetAddress (nAp), 9);
+  echoClient.SetAttribute ("MaxPackets", UintegerValue (10));
+  echoClient.SetAttribute ("Interval", TimeValue (Seconds (1.)));
+  echoClient.SetAttribute ("PacketSize", UintegerValue (1024));
+  ApplicationContainer clientApps = echoClient.Install (wifiStaNodes);
+  clientApps.Start (Seconds (2.0));
+  clientApps.Stop (Seconds (15.0));
+
+  // Install FlowMonitor on csma nodes
+  FlowMonitorHelper flowmon;
+  Ptr<FlowMonitor> monitor = flowmon.InstallAll();
 
   Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
   Simulator::Stop (Seconds (15.0));
-  std::cout<<"before anim setting\n";
 
-  AnimationInterface anim ("wireless-animation.xml"); // Mandatory                                         // 파일 생성 뒤에 숫자를 넣어서 패킷 포함 개수 설정
-  for (uint32_t i = 0; i < wifiStaNodes[0].GetN (); ++i)                                                     
+  AnimationInterface anim ("wireless-animation.xml"); // Mandatory
+  for (uint32_t i = 0; i < wifiStaNodes.GetN (); ++i)
     {
-      anim.UpdateNodeDescription (wifiStaNodes[0].Get (i), "End"); // Optional                               //wifiStaNodes[0] 에 "End" 텍스트 할당, 색깔 지정
-      anim.UpdateNodeColor (wifiStaNodes[0].Get (i), 255, 0, 0); // Optional 색깔
-      
+      anim.UpdateNodeDescription (wifiStaNodes.Get (i), "STA"); // Optional
+      anim.UpdateNodeColor (wifiStaNodes.Get (i), 255, 0, 0); // Optional
     }
-  for (uint32_t i = 0; i < wifiStaNodes[1].GetN (); ++i)                                                     
+  for (uint32_t i = 0; i < wifiApNodes.GetN (); ++i)
     {
-      anim.UpdateNodeDescription (wifiStaNodes[1].Get (i), "End"); // Optional                               //wifiStaNodes[0] 에 "End" 텍스트 할당, 색깔 지정
-      anim.UpdateNodeColor (wifiStaNodes[1].Get (i), 255, 0, 0); // Optional 색깔
+      anim.UpdateNodeDescription (wifiApNodes.Get (i), "AP"); // Optional
+      anim.UpdateNodeColor (wifiApNodes.Get (i), 0, 255, 0); // Optional
     }
-  anim.UpdateNodeDescription (wifiApNode[0].Get (0), "SAP-33.233"); // Optional
-  anim.UpdateNodeDescription (wifiApNode[0].Get (1), "16K-313-2-2"); // Optional
-  anim.UpdateNodeDescription (wifiApNode[0].Get (2), "SAP-33.234"); // Optional
-  anim.UpdateNodeDescription (wifiApNode[0].Get (3), "16K-313-2-3"); // Optional
+  anim.UpdateNodeDescription (csmaNodes.Get (nAp), "SERVER"); // Optional
+  anim.UpdateNodeColor (csmaNodes.Get (nAp), 0, 0, 255); // Optional 
 
-  for (uint32_t i = 0; i < wifiApNode[0].GetN (); ++i)
-    {
-      anim.UpdateNodeColor (wifiApNode[0].Get (i), 0, 255, 0); // Optional
-    }
+  anim.EnablePacketMetadata (); // Optional
+  anim.EnableWifiMacCounters (Seconds (0), Seconds (10)); //Optional
+  anim.EnableWifiPhyCounters (Seconds (0), Seconds (10)); //Optional
 
-  
-  anim.UpdateNodeDescription (wifiApNode[1].Get (0), "16K-313-2-1"); // Optional
-  anim.UpdateNodeColor (wifiApNode[1].Get (0), 0, 255, 0); // Optional
+  csma.EnablePcapAll("wireless-animation", false);
 
-  // anim.EnablePacketMetadata (); // Optional                                                                               //패킷 데이터 저장
-  // anim.EnableIpv4RouteTracking ("routingtable-wireless.xml", Seconds (0), Seconds (5), Seconds (0.25)); //Optional
-  // anim.EnableWifiMacCounters (Seconds (0), Seconds (10)); //Optional
-  // anim.EnableWifiPhyCounters (Seconds (0), Seconds (10)); //Optional
   Simulator::Run ();
+
+  monitor->CheckForLostPackets ();
+  Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier> (flowmon.GetClassifier ());
+  FlowMonitor::FlowStatsContainer stats = monitor->GetFlowStats ();
+  for (std::map<FlowId, FlowMonitor::FlowStats>::const_iterator i = stats.begin (); i != stats.end (); ++i)
+  {
+  //     if (i->first > 2)
+  //     {
+        Ipv4FlowClassifier::FiveTuple t = classifier->FindFlow (i->first);
+        cout << "Flow " << i->first - 2 << " (" << t.sourceAddress << " -> " << t.destinationAddress << ")\n";
+        cout << "  Tx Packets: " << i->second.txPackets << "\n";
+        cout << "  Tx Bytes:   " << i->second.txBytes << "\n";
+        cout << "  TxOffered:  " << i->second.txBytes * 8.0 / 9.0 / 1000 / 1000  << " Mbps\n";
+        cout << "  Rx Packets: " << i->second.rxPackets << "\n";
+        cout << "  Rx Bytes:   " << i->second.rxBytes << "\n";
+        cout << "  Throughput: " << i->second.rxBytes * 8.0 / 9.0 / 1000 / 1000  << " Mbps\n";
+  //     }
+  }
+
   Simulator::Destroy ();
   return 0;
 }
