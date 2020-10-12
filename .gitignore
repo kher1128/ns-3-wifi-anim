@@ -45,4 +45,8 @@ build/
 /.project
 
 version.cache
+.DS_Store
+.AUTHORS
+CHANGES.html
+CONTRIBUTING.md
 
