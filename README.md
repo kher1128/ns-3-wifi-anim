@@ -118,6 +118,8 @@ If you have successfully installed git, you can get
 a copy of the development version with the following command:
 ```shell
 git clone https://gitlab.com/nsnam/ns-3-dev.git
+./waf build
+./waf --run wireless-animation
 ```
 
 However, we recommend to follow the Gitlab guidelines for starters,
